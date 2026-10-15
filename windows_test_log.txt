@@ -1,0 +1,13 @@
+test_20000 (__main__.Tests.test_20000) ... ok
+test_empty_merge (__main__.Tests.test_empty_merge) ... ok
+test_extend (__main__.Tests.test_extend) ... ok
+test_filter (__main__.Tests.test_filter) ... ok
+test_finalize (__main__.Tests.test_finalize) ... ok
+test_interleaved (__main__.Tests.test_interleaved) ... ok
+test_setter (__main__.Tests.test_setter) ... ok
+test_state (__main__.Tests.test_state) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.184s
+
+OK

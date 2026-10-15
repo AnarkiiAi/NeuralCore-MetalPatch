@@ -1,0 +1,99 @@
+--- a/mlx_lm/models/cache.py
++++ b/mlx_lm/models/cache.py
+@@ -598,6 +598,40 @@
+         self.cache = [None] * size
+         self.left_padding = mx.array(left_padding) if left_padding else None
+         self.lengths = None
++        self._pending_advance = 0
++
++    @property
++    def lengths(self):
++        base = self._lengths
++        pending = getattr(self, "_pending_advance", 0)
++        return base - pending if base is not None and pending else base
++
++    @lengths.setter
++    def lengths(self, value):
++        pending = getattr(self, "_pending_advance", 0)
++        self._lengths = value + pending if value is not None and pending else value
++
++    @property
++    def left_padding(self):
++        base = self._left_padding
++        pending = getattr(self, "_pending_advance", 0)
++        return base - pending if base is not None and pending else base
++
++    @left_padding.setter
++    def left_padding(self, value):
++        pending = getattr(self, "_pending_advance", 0)
++        self._left_padding = value + pending if value is not None and pending else value
++
++    def _flush_advance(self):
++        pending = self._pending_advance
++        if pending:
++            if self._lengths is not None:
++                self._lengths = self._lengths - pending
++                mx.eval(self._lengths)
++            if self._left_padding is not None:
++                self._left_padding = self._left_padding - pending
++                mx.eval(self._left_padding)
++            self._pending_advance = 0
+ 
+     @property
+     def batch_size(self):
+@@ -619,13 +653,16 @@
+ 
+     @property
+     def state(self):
++        self._flush_advance()
+         return self.cache, self.left_padding, self.lengths
+ 
+     @state.setter
+     def state(self, v):
++        self._pending_advance = 0
+         self.cache, self.left_padding, self.lengths = v
+ 
+     def filter(self, batch_indices):
++        self._flush_advance()
+         """
+         In-place filter to keep just the given indices in the cache.
+         """
+@@ -640,6 +677,8 @@
+         In-place extend this cache with the other cache.
+         """
+ 
++        self._flush_advance()
++        other._flush_advance()
+         a_batch = self.batch_size
+         b_batch = other.batch_size
+ 
+@@ -672,17 +711,16 @@
+         return cache
+ 
+     def prepare(self, lengths=None, **kwargs):
++        self._flush_advance()
+         self.lengths = mx.array(lengths)
+ 
+     def finalize(self):
++        self._pending_advance = 0
+         self.lengths = None
+         self.left_padding = None
+ 
+     def advance(self, N):
+-        if self.lengths is not None:
+-            self.lengths -= N
+-        if self.left_padding is not None:
+-            self.left_padding -= N
++        self._pending_advance += int(N)
+ 
+     def make_mask(self, N: int):
+         pos = mx.arange(N)
+@@ -696,6 +734,8 @@
+ 
+     @classmethod
+     def merge(cls, caches):
++        for source in caches:
++            source._flush_advance()
+         n_state = len(caches[0].cache)
+         B = len(caches)
+         cache = cls(n_state)
